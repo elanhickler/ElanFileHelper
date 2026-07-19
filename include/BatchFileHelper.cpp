@@ -684,6 +684,11 @@ BatchFileChanger::Task* BatchFileChanger::addTask(string originalPath, string ne
     return &*TASKS.back();
 }
 
+void BatchFileChanger::addTasks(const vector<std::pair<string, string>>& fromToList, Operation operation) {
+    for (const auto& fromTo : fromToList)
+        addTask(fromTo.first, fromTo.second, operation);
+}
+
 void BatchFileChanger::setDuplicateFormat(int startingNumber, string regexMatch, string tagScriptReplace, int padFlag, int orderFlag, bool onlyRenameDuplicates) {
     duplicateFormat.startingNumber       = startingNumber;
     duplicateFormat.tagScriptReplace     = tagScriptReplace;
@@ -952,6 +957,16 @@ vector<string> BatchFileChanger::getRenameList() {
     // as-added order
     for (auto& t : TASKS)
         ret.push_back(t->origFile + "," + t->getNewPathStr());
+
+    return ret;
+}
+
+vector<std::pair<string, string>> BatchFileChanger::getRenamePairs() {
+    vector<std::pair<string, string>> ret;
+
+    // as-added order
+    for (auto& t : TASKS)
+        ret.push_back({ t->origFile, t->getNewPathStr() });
 
     return ret;
 }

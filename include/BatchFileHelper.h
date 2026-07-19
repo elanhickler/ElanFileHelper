@@ -5,6 +5,7 @@
 #include <random>
 #include <regex>
 #include <string>
+#include <utility>
 #include <vector>
 
 /*
@@ -76,6 +77,9 @@ class BatchFileChanger {
     */
     Task* addTask(std::string originalPath, std::string newPath, Operation operation);
 
+    // Adds one task per {from, to} pair -- the natural entry point for a UI handing over a FROM -> TO list.
+    void addTasks(const std::vector<std::pair<std::string, std::string>>& fromToList, Operation operation);
+
     // Customize the duplicate formatting. `regexMatch` is an ECMAScript regex applied to the
     // file name; `tagScriptReplace` is its replacement string (supports $1, $& etc.) where
     // "<num>" is substituted with the duplicate number. Default turns "name.ext" into "name(<num>).ext".
@@ -98,6 +102,10 @@ class BatchFileChanger {
 
     // Returns comma separated array of strings of oldPath,newPath.
     std::vector<std::string> getRenameList();
+
+    // Returns {oldPath, newPath} pairs in as-added order -- use this to re-link
+    // any external references (playlists, databases, project files) after runTasks().
+    std::vector<std::pair<std::string, std::string>> getRenamePairs();
 
     std::vector<std::unique_ptr<Task>> TASKS;
 
@@ -215,12 +223,20 @@ class BatchFileHelper {
     // Attempts to undo file changes. Returns false if something went wrong. Call this function again to retry the undo, it will pick up where it left off.
     bool undoFileChanges();
 
-  protected:
     struct fileNameChangesStruct {
         std::string oldFile;
         std::string newFile;
         bool fileWasCreated = false;
     };
+
+    // The rename/creation history behind undoFileChanges(), in the order the changes
+    // were made. Use it to display undo state in a UI or to re-link external
+    // references after a batch operation.
+    const std::vector<fileNameChangesStruct>& getFileChangeHistory() const {
+        return fileNameChanges;
+    }
+
+  protected:
 
     struct fileNameDupeStruct {
         fileNameDupeStruct();
@@ -257,7 +273,6 @@ class BatchFileHelper {
     std::map<std::string, std::map<std::string, std::vector<fileNameDupeStruct>>> folderFileMap;
     std::mt19937 random{ std::random_device{}() };
     int successfulUndoActions = 0;
-    std::map<std::string, std::string> renameList;
 
     void collectFiles();
 

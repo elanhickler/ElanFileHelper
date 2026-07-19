@@ -228,6 +228,11 @@ int runAllChecks() {
     CHECK(FileHelper::doesFileExist(changerDir + "/dest/three_copy.txt"));
     CHECK(FileHelper::doesFileExist(changerDir + "/three.txt")); // copy leaves source
 
+    auto renamePairs = changer.getRenamePairs();
+    CHECK(renamePairs.size() == 3);
+    CHECK_EQ(renamePairs[0].first, changerDir + "/one.txt");
+    CHECK_EQ(renamePairs[0].second, changerDir + "/dest/one.txt");
+
     changer.undoTasks();
 
     CHECK(FileHelper::doesFileExist(changerDir + "/one.txt"));
@@ -236,6 +241,21 @@ int runAllChecks() {
     CHECK(!FileHelper::doesFileExist(changerDir + "/two_renamed.txt"));
     CHECK(!FileHelper::doesFileExist(changerDir + "/dest/three_copy.txt"));
     CHECK(FileHelper::doesFileExist(changerDir + "/three.txt"));
+
+    /* --- addTasks: FROM -> TO list in one call, then run + undo again --- */
+
+    BatchFileChanger listChanger;
+    listChanger.addTasks({
+        { changerDir + "/one.txt", changerDir + "/uno.txt" },
+        { changerDir + "/two.txt", changerDir + "/dos.txt" },
+    }, BatchFileChanger::Operation::rename);
+    CHECK(listChanger.checkForConflicts().empty());
+    listChanger.runTasks();
+    CHECK(FileHelper::doesFileExist(changerDir + "/uno.txt"));
+    CHECK(FileHelper::doesFileExist(changerDir + "/dos.txt"));
+    listChanger.undoTasks();
+    CHECK(FileHelper::doesFileExist(changerDir + "/one.txt"));
+    CHECK(FileHelper::doesFileExist(changerDir + "/two.txt"));
 
     /* cleanup */
     fs::remove_all(sandbox, ec);
