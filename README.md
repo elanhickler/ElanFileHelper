@@ -143,7 +143,10 @@ Also on board: `printRenameList()` / `printFileList()` (display-ready
 summaries), `solveIllegalCharacterIssues()` (sanitize a whole list at
 once), `trashListedExistingFiles()` (collect-into-temp-folder → Recycle
 Bin, so even deletion is recoverable), `clearDupeNumbers()`,
-`fileListContainsIllegalChars()`.
+`fileListContainsIllegalChars()`, and static
+`getUnusedDupeNumbers(files)` — one collision-free dupe number per input
+file (suffixed files keep their number, the rest get the smallest free
+one), aligned with the input so `nums[i]` is always safe for `files[i]`.
 
 ## Building a UI on top
 

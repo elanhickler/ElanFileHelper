@@ -172,7 +172,14 @@ class BatchFileHelper {
     */
     void clearDupeNumbers();
 
-    std::vector<int> getUnusedDupeNumbers(std::vector<std::string>& files);
+    /*
+    Returns one dupe number per input file, aligned with the input order:
+    files that already carry a "(n)" suffix keep their existing number; every
+    other file is assigned the smallest number not used anywhere in the list
+    and not already assigned during this call. The result is collision-free
+    across the whole list, so ret[i] is always safe to stamp onto files[i].
+    */
+    static std::vector<int> getUnusedDupeNumbers(const std::vector<std::string>& files);
 
     /*
     Prints rename list as a string as oldname + seperator + newname + \n and each folder is separated by additional spaces.

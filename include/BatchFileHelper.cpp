@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <numeric>
+#include <set>
 #include <stdexcept>
 
 using std::string;
@@ -144,22 +145,43 @@ void BatchFileHelper::clearDupeNumbers() {
                 fND.clearDupeNumber();
 }
 
-vector<int> BatchFileHelper::getUnusedDupeNumbers(vector<string>& files) {
-    int numberToCheck = 1;
+vector<int> BatchFileHelper::getUnusedDupeNumbers(const vector<string>& files) {
+    // Pass 1: parse every file's suffix and collect the numbers already in use.
+    struct Parsed {
+        bool hasNumber;
+        int number;
+    };
+    vector<Parsed> parsed;
+    parsed.reserve(files.size());
 
-    vector<int> ret;
+    std::set<int> used;
 
-    for (auto& f : files) {
+    for (const auto& f : files) {
         int openParenIndex;
         int closeParenIndex;
         int dupeNumber;
 
-        if (fileNameDupeStruct::hasDupeSuffix(FileHelper::getName(f), openParenIndex, closeParenIndex, dupeNumber)) {
-            while (numberToCheck == dupeNumber)
-                ++numberToCheck;
-        }
+        bool has = fileNameDupeStruct::hasDupeSuffix(FileHelper::getName(f), openParenIndex, closeParenIndex, dupeNumber);
+        parsed.push_back({ has, dupeNumber });
+        if (has)
+            used.insert(dupeNumber);
+    }
 
-        ret.push_back(numberToCheck);
+    // Pass 2: suffixed files keep their number; the rest get the smallest
+    // number not used anywhere in the list and not already handed out.
+    vector<int> ret;
+    ret.reserve(files.size());
+
+    int next = 1;
+    for (const auto& p : parsed) {
+        if (p.hasNumber) {
+            ret.push_back(p.number);
+            continue;
+        }
+        while (used.count(next))
+            ++next;
+        used.insert(next);
+        ret.push_back(next);
     }
 
     return ret;

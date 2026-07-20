@@ -5,9 +5,11 @@
 #include "../include/BatchFileHelper.h"
 #include "../include/FileHelper.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using std::string;
@@ -235,6 +237,32 @@ int runAllChecks() {
     }
     CHECK(trackDupes == 3);
     CHECK(withContent == 1); // exactly one of them is the original, content intact
+
+    /* --- getUnusedDupeNumbers: collision-free numbering aligned with input --- */
+
+    {
+        auto nums = BatchFileHelper::getUnusedDupeNumbers({
+            "C:/x/a.txt",     // no suffix -> smallest free
+            "C:/x/a(2).txt",  // keeps 2
+            "C:/x/b.txt",     // no suffix -> next free
+            "C:/x/c(1).txt",  // keeps 1
+            "C:/x/d.txt",     // no suffix -> next free
+        });
+        CHECK(nums.size() == 5);
+        CHECK(nums[0] == 3 && nums[1] == 2 && nums[2] == 4 && nums[3] == 1 && nums[4] == 5);
+
+        // out-of-order used numbers must still be avoided (the original bug)
+        auto nums2 = BatchFileHelper::getUnusedDupeNumbers({ "C:/x/n(3).txt", "C:/x/n.txt", "C:/x/n2.txt", "C:/x/n3.txt" });
+        CHECK(nums2.size() == 4);
+        CHECK(nums2[0] == 3 && nums2[1] == 1 && nums2[2] == 2 && nums2[3] == 4);
+
+        // no duplicates across the whole result, ever
+        std::vector<int> sortedNums = nums;
+        std::sort(sortedNums.begin(), sortedNums.end());
+        CHECK(std::adjacent_find(sortedNums.begin(), sortedNums.end()) == sortedNums.end());
+
+        CHECK(BatchFileHelper::getUnusedDupeNumbers({}).empty());
+    }
 
     /* --- swapFileNames: two files exchange names, then history-undo restores them --- */
 
