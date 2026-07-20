@@ -14,5 +14,10 @@ if(WIN32)
     target_link_libraries(ElanFileHelper PUBLIC shell32)
 endif()
 
+if(MSVC)
+    # Paths are UTF-8 at the API boundary; keep source/literal encoding consistent.
+    target_compile_options(ElanFileHelper PUBLIC /utf-8)
+endif()
+
 add_executable(smoke_test tests/smoke_test.cpp)
 target_link_libraries(smoke_test PRIVATE ElanFileHelper)

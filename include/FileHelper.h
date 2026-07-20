@@ -10,9 +10,11 @@ This class is NOT for manipulating strings that are file-like, although
 there are a few helper functions for manipulating strings as needed.
 
 std edition: ported from the original JUCE version. All paths are
-std::string (system narrow encoding; ASCII-safe everywhere, UTF-8 works on
-most setups). Internally backed by std::filesystem. The old StringOrFile
-helper class is gone -- everything takes and returns std::string.
+std::string encoded as UTF-8 (on Windows they are converted to wide
+characters internally, with a system-codepage fallback for legacy
+non-UTF-8 input). Internally backed by std::filesystem. The old
+StringOrFile helper class is gone -- everything takes and returns
+std::string.
 
 NOTE: There will not be an ending slash when retrieving folders/paths/directories
 

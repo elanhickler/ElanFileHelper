@@ -14,6 +14,15 @@ using std::string;
 
 static int failures = 0;
 
+// Exposes BatchFileHelper's protected swap/undo internals so the
+// collision-swap path gets direct coverage.
+struct BatchFileHelperTester : BatchFileHelper {
+    using BatchFileHelper::BatchFileHelper;
+    using BatchFileHelper::swapFileNames;
+    using BatchFileHelper::fileNameChanges;
+    using BatchFileHelper::attemptToUndoFileRenames;
+};
+
 #define CHECK(expr)                                                        \
     do {                                                                   \
         if (expr) {                                                        \
@@ -175,6 +184,28 @@ int runAllChecks() {
     FileHelper::permanentDelete(temp);
     CHECK(!FileHelper::doesFileExist(temp));
 
+    /* --- UTF-8 paths (source compiled with /utf-8, literals are UTF-8 bytes) --- */
+
+    string uniDir = sandbox + "/unicode_日本語_ñ";
+    FileHelper::createFolder(uniDir);
+    CHECK(FileHelper::doesFolderExist(uniDir));
+
+    string uniFile = uniDir + "/tëst_файл_🎵.txt";
+    FileHelper::createTextFile(uniFile, "unicode contents", false);
+    CHECK(FileHelper::doesFileExist(uniFile));
+    CHECK_EQ(FileHelper::readFile(uniFile), "unicode contents");
+
+    auto uniListed = FileHelper::getFiles(uniDir);
+    CHECK(uniListed.size() == 1);
+    if (!uniListed.empty()) {
+        CHECK_EQ(uniListed[0], uniFile); // listing round-trips the exact UTF-8 path
+    }
+
+    string uniRenamed = FileHelper::setFileName(uniFile, "prüfung_✓.txt", false);
+    CHECK(FileHelper::doesFileExist(uniRenamed));
+    CHECK_EQ(FileHelper::getName(uniRenamed), "prüfung_✓.txt");
+    CHECK_EQ(FileHelper::readFile(uniRenamed), "unicode contents");
+
     /* --- BatchFileHelper: duplicate suffixes + creation --- */
 
     string batchDir = sandbox + "/batch";
@@ -204,6 +235,28 @@ int runAllChecks() {
     }
     CHECK(trackDupes == 3);
     CHECK(withContent == 1); // exactly one of them is the original, content intact
+
+    /* --- swapFileNames: two files exchange names, then history-undo restores them --- */
+
+    string swapDir = sandbox + "/swap";
+    FileHelper::createFolder(swapDir);
+    string swapA = swapDir + "/apple.txt";
+    string swapB = swapDir + "/banana.txt";
+    FileHelper::createTextFile(swapA, "A", false);
+    FileHelper::createTextFile(swapB, "B", false);
+
+    BatchFileHelperTester swapTester({ swapDir + "/unused.txt" });
+    swapTester.fileNameChanges.clear(); // isolate history to the swap itself
+    swapTester.swapFileNames(swapA, swapB, swapTester.fileNameChanges);
+
+    CHECK_EQ(FileHelper::readFile(swapDir + "/apple.txt"), "B");  // banana's content now lives under apple's name
+    CHECK_EQ(FileHelper::readFile(swapDir + "/banana.txt"), "A"); // and vice versa
+    CHECK(swapTester.fileNameChanges.size() == 3);                // temp-rename + two renames recorded
+
+    CHECK(swapTester.attemptToUndoFileRenames());
+    CHECK_EQ(FileHelper::readFile(swapDir + "/apple.txt"), "A");  // fully restored
+    CHECK_EQ(FileHelper::readFile(swapDir + "/banana.txt"), "B");
+    CHECK(FileHelper::getFiles(swapDir).size() == 2);             // no stray temp-named files left behind
 
     /* --- BatchFileChanger: move + rename + copy, then undo --- */
 

@@ -39,9 +39,58 @@ static const string systemSlash = "/";
 /* internal helpers */
 namespace {
 
+#ifdef _WIN32
+// Paths are UTF-8 at the API boundary. Windows' narrow fs::path constructor
+// would interpret them in the legacy system codepage, mangling anything
+// non-ASCII -- so convert explicitly. Invalid UTF-8 (e.g. a legacy
+// ANSI-encoded string) falls back to the system codepage instead of failing.
+std::wstring utf8ToWide(const string& s) {
+    if (s.empty()) {
+        return {};
+    }
+    UINT codePage = CP_UTF8;
+    int wideLen   = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), int(s.size()), nullptr, 0);
+    if (wideLen == 0) {
+        codePage = CP_ACP;
+        wideLen  = MultiByteToWideChar(CP_ACP, 0, s.c_str(), int(s.size()), nullptr, 0);
+        if (wideLen == 0) {
+            return {};
+        }
+    }
+    std::wstring w(size_t(wideLen), L'\0');
+    MultiByteToWideChar(codePage, 0, s.c_str(), int(s.size()), &w[0], wideLen);
+    return w;
+}
+
+string wideToUtf8(const std::wstring& w) {
+    if (w.empty()) {
+        return {};
+    }
+    int narrowLen = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), int(w.size()), nullptr, 0, nullptr, nullptr);
+    if (narrowLen == 0) {
+        return {};
+    }
+    string s(size_t(narrowLen), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), int(w.size()), &s[0], narrowLen, nullptr, nullptr);
+    return s;
+}
+
+fs::path toPath(const string& s) {
+    return fs::path(utf8ToWide(s));
+}
+
+string fromPath(const fs::path& p) {
+    return wideToUtf8(p.wstring());
+}
+#else
 fs::path toPath(const string& s) {
     return fs::path(s);
 }
+
+string fromPath(const fs::path& p) {
+    return p.string();
+}
+#endif
 
 string trimCopy(const string& s) {
     size_t b = s.find_first_not_of(" \t\r\n");
@@ -50,11 +99,6 @@ string trimCopy(const string& s) {
     }
     size_t e = s.find_last_not_of(" \t\r\n");
     return s.substr(b, e - b + 1);
-}
-
-string rtrimSpaces(const string& s) {
-    size_t e = s.find_last_not_of(' ');
-    return e == string::npos ? string{} : s.substr(0, e + 1);
 }
 
 string stripTrailingSlashes(const string& s) {
@@ -458,7 +502,7 @@ namespace {
 
 void osOpen(const string& path) {
 #ifdef _WIN32
-    fs::path p = fs::absolute(fs::path(path));
+    fs::path p = fs::absolute(toPath(path));
     ShellExecuteW(nullptr, L"open", p.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
     #ifdef __APPLE__
@@ -471,7 +515,7 @@ void osOpen(const string& path) {
 
 void osReveal(const string& path) {
 #ifdef _WIN32
-    fs::path p    = fs::absolute(fs::path(path));
+    fs::path p    = fs::absolute(toPath(path));
     std::wstring params = L"/select,\"" + p.wstring() + L"\"";
     ShellExecuteW(nullptr, L"open", L"explorer.exe", params.c_str(), nullptr, SW_SHOWNORMAL);
 #else
@@ -719,7 +763,7 @@ string FileHelper::createFile(const string& filePath, bool overwrite) {
 
 string FileHelper::createTempFile() {
     std::error_code ec;
-    string tempFolder = toForwardSlashes(fs::temp_directory_path(ec).string());
+    string tempFolder = toForwardSlashes(fromPath(fs::temp_directory_path(ec)));
     string tempPath;
 
     do {
@@ -867,22 +911,22 @@ vector<string> listDirectory(const string& directory, const string& wildCard, bo
         if (wantFolders != isDir) {
             return;
         }
-        string name = entry.path().filename().string();
+        string name = fromPath(entry.path().filename());
         if (!wildcardMatch(name, wildCard)) {
             return;
         }
-        v.push_back(toForwardSlashes(entry.path().string()));
+        v.push_back(toForwardSlashes(fromPath(entry.path())));
     };
 
     if (recursive) {
-        for (fs::recursive_directory_iterator it(fs::path(directory), fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
+        for (fs::recursive_directory_iterator it(toPath(directory), fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
             if (ec) {
                 break;
             }
             consider(*it);
         }
     } else {
-        for (fs::directory_iterator it(fs::path(directory), fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
+        for (fs::directory_iterator it(toPath(directory), fs::directory_options::skip_permission_denied, ec), end; it != end; it.increment(ec)) {
             if (ec) {
                 break;
             }
@@ -1153,7 +1197,7 @@ string FileHelper::getParent(int levels, const string& path) {
             break;
         }
         // clamp at drive/filesystem root
-        string root = toForwardSlashes(toPath(current).root_path().string());
+        string root = toForwardSlashes(fromPath(toPath(current).root_path()));
         current     = parent;
         if (stripTrailingSlashes(current) == stripTrailingSlashes(root)) {
             break;

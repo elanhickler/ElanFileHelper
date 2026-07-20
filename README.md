@@ -7,7 +7,9 @@ nothing else) for file handling that treats batch operations as a
 first-class workflow: build a FROM → TO list, show the user exactly what
 will happen, detect every conflict *before* touching the disk, run it,
 and — if anyone changes their mind — undo the whole thing from the
-recorded rename history.
+recorded rename history. Paths are UTF-8 throughout (converted to wide
+characters internally on Windows), so `日本語`, `prüfung ✓`, and emoji
+filenames all round-trip correctly.
 
 Ported from the battle-tested JUCE-era `ElanJuceHelpers` and re-verified
 from scratch (83-check smoke test, all passing).
